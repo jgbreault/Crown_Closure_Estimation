@@ -1,7 +1,7 @@
 import os
 import zipfile
 import urllib.request
-
+from osgeo import gdal, ogr, osr
 import processing
 from qgis.core import (
     QgsProject,
@@ -27,7 +27,7 @@ LAYER_NAME   = "VEG_COMP_LYR_R1_POLY"
 DATASETS_DIR = "/Volumes/Spleen/CABIN/datasets"
 GDB_PATH     = os.path.join(DATASETS_DIR, GDB_NAME)
 
-KEEP_FIELDS  = ["CROWN_CLOSURE", "CROWN_CLOSURE_CLASS_CD"]
+KEEP_FIELDS  = ["CROWN_CLOSURE"]
 BURN_FIELD   = "CROWN_CLOSURE"
 PIXEL_SIZE   = 25
 NO_DATA      = -9999
@@ -37,6 +37,7 @@ LAT_MIN, LAT_MAX = 49, 51
 LNG_MIN, LNG_MAX = -125, -119
 
 GPKG_PATH    = os.path.join(DATASETS_DIR, "study_area.gpkg")
+MASK_PATH    = os.path.join(DATASETS_DIR, "crown_closure_mask.tif")
 RASTER_PATH  = os.path.join(DATASETS_DIR, "crown_closure_raster.tif")
 
 # ---------------------------------------------------------
@@ -101,8 +102,7 @@ request       = (
 )
 
 out_fields = QgsFields()
-out_fields.append(QgsField("CROWN_CLOSURE",          QVariant.Int))
-out_fields.append(QgsField("CROWN_CLOSURE_CLASS_CD", QVariant.String))
+out_fields.append(QgsField("CROWN_CLOSURE", QVariant.Int))
 
 mem_layer = QgsVectorLayer(
     f"MultiPolygon?crs={out_crs.authid()}", "study_area", "memory"
@@ -190,3 +190,39 @@ if not raster_layer.isValid():
 
 QgsProject.instance().addMapLayer(raster_layer)
 print("Done — 'crown_closure' added to QGIS project.")
+
+# ---------------------------------------------------------
+# 7. Build VRI validity mask via OGR/GDAL directly
+#    White (1) = CROWN_CLOSURE not null, Black (0) = null or no polygon
+# ---------------------------------------------------------
+x_min  = extent.xMinimum()
+y_max  = extent.yMaximum()
+n_px_x = int(round((extent.xMaximum() - x_min) / PIXEL_SIZE))
+n_px_y = int(round((y_max - extent.yMinimum()) / PIXEL_SIZE))
+
+vec_ds  = ogr.Open(GPKG_PATH)
+ogr_lyr = vec_ds.GetLayerByName("study_area")
+ogr_lyr.SetAttributeFilter("CROWN_CLOSURE IS NOT NULL")
+print(f"  Features with non-null CROWN_CLOSURE: {ogr_lyr.GetFeatureCount()}")
+
+drv     = gdal.GetDriverByName("GTiff")
+mask_ds = drv.Create(MASK_PATH, n_px_x, n_px_y, 1, gdal.GDT_Byte, ["COMPRESS=LZW"])
+mask_ds.SetGeoTransform([x_min, PIXEL_SIZE, 0, y_max, 0, -PIXEL_SIZE])
+srs_out = osr.SpatialReference()
+srs_out.ImportFromEPSG(3857)
+mask_ds.SetProjection(srs_out.ExportToWkt())
+
+band = mask_ds.GetRasterBand(1)
+band.Fill(0)
+band.FlushCache()
+
+gdal.RasterizeLayer(mask_ds, [1], ogr_lyr, burn_values=[1])
+mask_ds.FlushCache()
+mask_ds = None
+vec_ds  = None
+
+mask_layer = QgsRasterLayer(MASK_PATH, "crown_closure_mask")
+if not mask_layer.isValid():
+    raise RuntimeError(f"Mask raster invalid: {MASK_PATH}")
+QgsProject.instance().addMapLayer(mask_layer)
+print(f"Saved mask → {MASK_PATH}  ('crown_closure_mask' added to QGIS project)")
