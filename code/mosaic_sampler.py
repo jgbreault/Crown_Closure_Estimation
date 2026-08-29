@@ -26,7 +26,7 @@ PATCH_SIZE_M  = 6400   # side length in metres
 PATCH_SIZE_PX = 256    # output image size in pixels
 
 # QGIS layer names
-SAT_LAYER = "sentinel2_2024"
+SAT_LAYER = "sentinel2_2025"
 
 # Source raster paths
 DEM_PATH      = "/Volumes/Spleen/CABIN/datasets/DEM.tif"
