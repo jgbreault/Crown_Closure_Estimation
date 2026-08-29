@@ -1,5 +1,4 @@
 import os
-import shutil
 import numpy as np
 from osgeo import gdal
 from PyQt5.QtGui import QImage
@@ -76,17 +75,10 @@ def patch_name(row, col):
     return f"patch_{row * n_cols + col:04d}.png"
 
 # ---------------------------------------------------------
-# Clear previous run — start fresh every time
+# Setup
 # ---------------------------------------------------------
 for d in (SAT_OUT, DEM_OUT, CANOPY_OUT, MASK_OUT):
-    shutil.rmtree(d, ignore_errors=True)
     os.makedirs(d, exist_ok=True)
-
-if os.path.exists(FOOTPRINTS_PATH):
-    os.remove(FOOTPRINTS_PATH)
-
-for lyr in QgsProject.instance().mapLayersByName("patch_footprints"):
-    QgsProject.instance().removeMapLayer(lyr.id())
 
 crs_3857 = QgsCoordinateReferenceSystem("EPSG:3857")
 
