@@ -1,7 +1,6 @@
 import os
 import re
 import glob
-import subprocess
 import urllib.request
 import urllib.error
 import zipfile
@@ -11,10 +10,12 @@ import zipfile
 # ---------------------------------------------------------
 BASE_URL    = "https://pub.data.gov.bc.ca/datasets/175624"
 OUT_DIR     = "/Volumes/Spleen/CABIN/datasets/dem"
-MERGED_PATH = "/Volumes/Spleen/CABIN/datasets/dem_merged.tif"
+VRT_PATH    = "/Volumes/Spleen/CABIN/datasets/dem_merged.vrt"
+DEM_PATH    = "/Volumes/Spleen/CABIN/datasets/DEM.tif"
 
-# GDAL CLI tools installed by QGIS — update path if needed
-GDAL_BIN = "/Applications/QGIS.app/Contents/MacOS/bin"
+# AOI — same as cropper (EPSG:4326)
+LAT_MIN, LAT_MAX = 49, 51
+LNG_MIN, LNG_MAX = -125, -119
 
 # NTS 1:250,000 sheets covering approx lat 49-51, lng -119 to -125.
 # Add or remove sheets as needed — full list at:
@@ -22,7 +23,9 @@ GDAL_BIN = "/Applications/QGIS.app/Contents/MacOS/bin"
 SHEETS = [
     "82e", "82f",           # ~49-50N, eastern AOI
     "82l", "82m",           # ~50-51N, eastern AOI
-    "92h", "92i",           # ~49-50N, western AOI
+    "92a", "92b",           # Greater Vancouver, southern Vancouver Island
+    "92f", "92g",           # Fraser Valley / Hope, Howe Sound / Sunshine Coast
+    "92h", "92i",           # western AOI mid-band
     "92j", "92k",           # ~50-51N, western AOI
 ]
 
@@ -88,30 +91,44 @@ for sheet in SHEETS:
             unzip_and_remove(dest)
 
 # ---------------------------------------------------------
-# Stitch all .dem files into one GeoTIFF
+# Build Virtual Raster from all .dem files
 # ---------------------------------------------------------
 print("\nSearching for .dem files...")
 dem_files = sorted(glob.glob(os.path.join(OUT_DIR, "**", "*.dem"), recursive=True))
 
 if not dem_files:
-    print("No .dem files found — skipping stitch.")
+    print("No .dem files found — skipping VRT build.")
 else:
-    print(f"Stitching {len(dem_files)} tiles into {MERGED_PATH} ...")
+    print(f"Building virtual raster from {len(dem_files)} tiles → {VRT_PATH} ...")
 
-    vrt_path        = MERGED_PATH.replace(".tif", ".vrt")
-    gdalbuildvrt    = os.path.join(GDAL_BIN, "gdalbuildvrt")
-    gdal_translate  = os.path.join(GDAL_BIN, "gdal_translate")
+    from osgeo import gdal
 
-    subprocess.run([gdalbuildvrt, vrt_path] + dem_files, check=True)
+    # Build intermediate VRT mosaic
+    vrt = gdal.BuildVRT(VRT_PATH, dem_files)
+    vrt.FlushCache()
+    vrt = None
+    print(f"Intermediate VRT saved → {VRT_PATH}")
 
-    subprocess.run([
-        gdal_translate,
-        "-co", "COMPRESS=LZW",
-        "-co", "TILED=YES",
-        "-co", "BIGTIFF=IF_SAFER",
-        vrt_path, MERGED_PATH,
-    ], check=True)
+    # Clip to AOI and write final DEM.tif
+    print(f"Clipping to AOI → {DEM_PATH} ...")
+    gdal.Warp(
+        DEM_PATH, VRT_PATH,
+        outputBounds=(LNG_MIN, LAT_MIN, LNG_MAX, LAT_MAX),
+        outputBoundsSRS="EPSG:4326",
+        creationOptions=["COMPRESS=LZW", "TILED=YES", "BIGTIFF=IF_SAFER"],
+    )
+    print(f"Saved {DEM_PATH}")
 
-    print(f"Saved {MERGED_PATH}")
+    # Add to QGIS project if running inside QGIS
+    try:
+        from qgis.core import QgsProject, QgsRasterLayer
+        layer = QgsRasterLayer(DEM_PATH, "DEM")
+        if layer.isValid():
+            QgsProject.instance().addMapLayer(layer)
+            print("Added to QGIS project as 'DEM'.")
+        else:
+            print("DEM.tif saved but failed to load as QGIS layer.")
+    except ImportError:
+        pass  # running outside QGIS — skip
 
 print("\nDone.")
