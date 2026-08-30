@@ -4,7 +4,7 @@ import math
 from PIL import Image
 
 # ---------------------------------------------------------
-# Config — same output dirs and grid as mosaic_sampler.py
+# Config — same output dirs and grid as generate_patch_images.py
 # ---------------------------------------------------------
 SAT_OUT    = "/Volumes/Spleen/CABIN/datasets/patches/satellite_imagery"
 DEM_OUT    = "/Volumes/Spleen/CABIN/datasets/patches/elevation"
@@ -16,18 +16,18 @@ OUT_DIR = "/Volumes/Spleen/CABIN/datasets/patches/patch_summaries"
 PATCH_SIZE_PX = 256
 PATCH_SIZE_M  = 6400
 
-# AOI — must match mosaic_sampler.py (EPSG:4326)
+# AOI — must match generate_patch_images.py (EPSG:4326)
 LAT_MIN, LAT_MAX = 49, 51
 LNG_MIN, LNG_MAX = -125, -119
 
 # DEM patches are stored as a 0-255 brightness scaled over this fixed
-# range (see mosaic_sampler.py) — decode back to metres here.
+# range (see generate_patch_images.py) — decode back to metres here.
 DEM_ELEV_MIN = 0
 DEM_ELEV_MAX = 4671
 
 # ---------------------------------------------------------
 # Web Mercator (EPSG:3857) <-> lon/lat — same spherical formulas
-# QGIS uses for this CRS, so the grid lines up with mosaic_sampler.py
+# QGIS uses for this CRS, so the grid lines up with generate_patch_images.py
 # ---------------------------------------------------------
 EARTH_RADIUS_M = 6378137.0
 

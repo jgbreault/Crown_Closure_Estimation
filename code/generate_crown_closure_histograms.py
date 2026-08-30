@@ -8,7 +8,7 @@ from osgeo import ogr
 # ---------------------------------------------------------
 # Config
 # ---------------------------------------------------------
-GPKG_PATH  = "/Volumes/Spleen/CABIN/datasets/study_area.gpkg"
+GPKG_PATH  = "/Volumes/Spleen/CABIN/datasets/crown_closure_polygons.gpkg"
 LAYER_NAME = "study_area"
 PLOTS_DIR  = "/Volumes/Spleen/CABIN/plots"
 

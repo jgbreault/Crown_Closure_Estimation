@@ -36,9 +36,13 @@ NO_DATA      = -9999
 LAT_MIN, LAT_MAX = 49, 51
 LNG_MIN, LNG_MAX = -125, -119
 
-GPKG_PATH    = os.path.join(DATASETS_DIR, "study_area.gpkg")
-MASK_PATH    = os.path.join(DATASETS_DIR, "crown_closure_mask.tif")
-RASTER_PATH  = os.path.join(DATASETS_DIR, "crown_closure_raster.tif")
+GPKG_PATH   = os.path.join(DATASETS_DIR, "crown_closure_polygons.gpkg")
+MASK_DIR    = os.path.join(DATASETS_DIR, "crown_closure_mask")
+RASTER_DIR  = os.path.join(DATASETS_DIR, "crown_closure_raster")
+MASK_PATH   = os.path.join(MASK_DIR, "crown_closure_mask.tif")
+RASTER_PATH = os.path.join(RASTER_DIR, "crown_closure_raster.tif")
+os.makedirs(MASK_DIR, exist_ok=True)
+os.makedirs(RASTER_DIR, exist_ok=True)
 
 # ---------------------------------------------------------
 # 1. Download GDB if not present
