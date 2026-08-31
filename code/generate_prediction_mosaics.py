@@ -1,4 +1,5 @@
 import os
+import re
 import glob
 import math
 import time
@@ -88,10 +89,13 @@ COEFS_CSV = max(coef_candidates, key=os.path.getmtime)  # most recently trained
 coefs = pd.read_csv(COEFS_CSV, index_col="feature")["coef"]
 print(f"Loaded linear regression coefficients from {COEFS_CSV}")
 
-ckpt_candidates = glob.glob(os.path.join(MODELS_DIR, "segformer_crown_closure_epoch020_testrmse*"))
+ckpt_candidates = glob.glob(os.path.join(MODELS_DIR, "segformer_crown_closure_epoch*_testrmse*"))
 if not ckpt_candidates:
-    raise RuntimeError("No epoch-020 SegFormer checkpoint found under models/ -- train to epoch 20 first.")
-SEGFORMER_CKPT = ckpt_candidates[0]
+    raise RuntimeError("No SegFormer checkpoint found under models/ -- train it first.")
+SEGFORMER_CKPT = min(
+    ckpt_candidates,
+    key=lambda d: float(re.search(r"_testrmse([\d.]+)", os.path.basename(d)).group(1)),
+)
 model = SegformerForSemanticSegmentation.from_pretrained(SEGFORMER_CKPT).to(DEVICE).eval()
 print(f"Loaded SegFormer checkpoint: {SEGFORMER_CKPT}")
 
