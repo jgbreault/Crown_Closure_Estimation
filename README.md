@@ -4,7 +4,7 @@ Crown closure is the percentage of ground covered by the vertical projection of 
 
 Two models are compared on the same task, over the same area of interest (a ~668 km × ~350 km band of southern BC, latitude 49-51°N, longitude 119-125°W): a linear regression baseline (RGB and elevation, with elevation entered as a polynomial), and a SegFormer vision transformer fine-tuned from a pretrained satellite-imagery checkpoint.
 
-| Model | Test RMSE (crown closure, pp) | Inference time/image |
+| Model | Test RMSE (crown closure, %) | Inference time/image |
 |---|---|---|
 | Linear regression | ~20.3 | ~0.39 ms |
 | SegFormer (86 epochs so far) | ~10.2 | ~6.26 ms |
