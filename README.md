@@ -2,14 +2,19 @@
 
 Crown closure is the percentage of ground covered by the vertical projection of tree canopy, and it's a key input to forest management, wildfire risk, and habitat modelling. Measuring it on the ground is slow and expensive, so this project asks whether it can be predicted directly from satellite RGB imagery and elevation, checked against real ground-truth measurements from British Columbia's forest inventory.
 
-Two models are compared on the same task, over the same area of interest (a ~668 km × ~350 km band of southern BC, latitude 49-51°N, longitude 119-125°W): a linear regression baseline (RGB and elevation, with elevation entered as a polynomial), and a SegFormer vision transformer fine-tuned from a pretrained satellite-imagery checkpoint.
+Two models are compared on the same task, over the same area of interest (95,580 km² of southern BC, latitude 49-51°N, longitude 119-125°W — chosen to be representative of much of the province: rainforests, arid forests, mountains, ocean/lakes/rivers, cities, and farmland): a linear regression baseline (RGB and elevation, with elevation entered as a polynomial), and a SegFormer vision transformer fine-tuned from a pretrained satellite-imagery checkpoint.
 
 | Model | Test RMSE (crown closure, %) | Inference time/image |
 |---|---|---|
 | Linear regression | ~20.3 | ~0.39 ms |
 | SegFormer (86 epochs so far) | ~10.2 | ~6.26 ms |
 
-The area of interest is split into a 104 × 54 grid of 6.4 km patches (5,616 total, 25 m/pixel), each rendered as satellite RGB, elevation, crown closure, and a validity mask, so patches can be shuffled, split, and streamed independently rather than working with the whole region as one giant raster.
+The fitted linear model (all features standardized to 0-1 before fitting):
+```
+crown_closure = 12 - 154(R) + 96(G) + 28(B) + 144(elevation) - 266(elevation²)
+```
+
+The area of interest is split into a 104 × 54 grid of 6.4 km patches (5,616 total, 25 m/pixel), each rendered as satellite RGB, elevation, crown closure, and a validity mask, so patches can be shuffled, split, and streamed independently rather than working with the whole region as one giant raster. Flattened to one row per pixel, the final dataset is 368 million rows (~20.4 GB).
 
 
 ## Plots
@@ -30,7 +35,7 @@ The area of interest is split into a 104 × 54 grid of 6.4 km patches (5,616 tot
 ## Data Sources
 
 1. <a href="https://catalogue.data.gov.bc.ca/dataset/vri-2025-forest-vegetation-composite-rank-1-layer-r1-" target="_blank" rel="noopener noreferrer">BC Vegetation Resources Inventory (VRI)</a>
-    - Province-wide forest polygons with a `CROWN_CLOSURE` field, the ground-truth label for this project. Downloaded automatically as a ~4 GB File Geodatabase from a static government URL, clipped to the area of interest, then rasterized to a 25 m grid alongside a validity mask marking where a real (non-null) measurement exists. Native CRS is NAD83 / BC Albers (EPSG:3005).
+    - Province-wide forest polygons with a `CROWN_CLOSURE` field, the ground-truth label for this project. Downloaded automatically as a ~4 GB File Geodatabase from a static government URL, clipped to the area of interest, then rasterized to a 25 m grid alongside a validity mask marking where a real (non-null) measurement exists. Null values (no VRI polygon, or a polygon with no crown closure recorded) are stored as 0 in the crown closure raster itself — the separate validity mask is what lets a real 0% closure be distinguished from "no data" downstream. Native CRS is NAD83 / BC Albers (EPSG:3005).
 2. <a href="https://pub.data.gov.bc.ca/datasets/175624/" target="_blank" rel="noopener noreferrer">BC Digital Elevation Model (CDED, NTS 1:250,000)</a>
     - Elevation tiles covering the area of interest (discovered and downloaded by scraping each NTS sheet's directory listing), mosaicked into a single DEM and normalized against BC's true elevation range (0 m to 4,671 m, Mt. Fairweather) so every model input uses the same fixed scale. Native resolution is 0.75 arc-seconds (~15-23 m depending on latitude/axis); native CRS is NAD83 geographic (EPSG:4269).
 3. <a href="https://s2maps.eu/" target="_blank" rel="noopener noreferrer">EOX s2cloudless (2025)</a>
@@ -111,8 +116,20 @@ CABIN/
 ├── plots/                                  # Exported figures
 ├── AOI_visualizer.qgz                      # QGIS project tying all the layers together
 ├── requirements.txt                        # Anaconda-side dependencies (training/prediction/visualization)
+├── presentation_slides.pdf                 # Project presentation
 └── README.md                               # This file
 ```
+
+
+## Next Steps
+
+- **Use a real validation set.** Right now the "test" set is checked every epoch to pick the best SegFormer checkpoint, then reused as the final reported metric — that's a form of selection bias. A proper train/validation/test split would use validation for checkpoint selection and touch test exactly once, at the end.
+- **Separate training/validation/test sets by location, not by pixel.** The current split is a per-pixel random shuffle within each patch, which doesn't prevent spatial leakage (neighboring pixels 25 m apart are highly correlated). Splitting by patch or spatial block, with a buffer zone between them, would give an honest measure of how well the model generalizes to genuinely new locations.
+- **Normalize elevation based on training data**, not BC's absolute maximum (4,671 m, Mt. Fairweather). The AOI's actual elevation only reaches ~3,188 m, and crown closure has no meaningful signal above treeline anyway — a tighter, training-data-derived range would use the full 0-255 encoding more efficiently.
+- **Overlap tiles.** Patches are currently stitched into the whole-AOI mosaics edge-to-edge with no overlap, which produces visible seams — each patch is inferred in isolation, so pixels near a patch's border don't have access to the real neighboring context just across the boundary. Rendering patches with overlapping edges and blending predictions in the overlap region would remove this.
+- **Estimate null areas** rather than zeroing them out. Areas with no VRI polygon are currently masked out and treated as 0 in the crown closure raster; a next step would be predicting a value for them instead of excluding them.
+- **Use near-infrared.** Sentinel-2 provides an NIR band beyond the RGB used here, and NIR/NDVI is the standard vegetation-density signal in remote sensing — likely more directly informative than RGB alone.
+- **More training, more data.** SegFormer's test RMSE was still improving at epoch 86 (no sign of having plateaued), and a larger or more diverse AOI would help the model generalize beyond this specific region.
 
 
 ## Deliverables
