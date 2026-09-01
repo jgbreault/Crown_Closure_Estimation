@@ -8,4 +8,5 @@
 .virtual_documents/
 
 # Datasets
-datasets/
+datasets/*
+!datasets/crown_closure_pred_segformer_mosaic/

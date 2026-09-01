@@ -2,15 +2,12 @@
 
 Crown closure is the percentage of ground covered by the vertical projection of tree canopy, and it's a key input to forest management, wildfire risk, and habitat modelling. Measuring it on the ground is slow and expensive, so this project asks whether it can be predicted directly from satellite RGB imagery and elevation, checked against real ground-truth measurements from British Columbia's forest inventory.
 
-Two models are compared on the same task, over the same area of interest (a ~668 km × ~350 km band of southern BC, lat 49-51°N): a linear regression baseline (RGB and elevation, with elevation entered as a polynomial), and a SegFormer vision transformer fine-tuned from a pretrained satellite-imagery checkpoint. The linear model reaches an R² of 0.28 (test RMSE ~20.3 percentage points of crown closure); SegFormer, trained for 86 epochs so far, gets the test RMSE down to ~10.2.
+Two models are compared on the same task, over the same area of interest (a ~668 km × ~350 km band of southern BC, lat 49-51°N, lng 119-125°W): a linear regression baseline (RGB and elevation, with elevation entered as a polynomial), and a SegFormer vision transformer fine-tuned from a pretrained satellite-imagery checkpoint. The linear model reaches an R² of 0.28 (test RMSE ~20.3 percentage points of crown closure); SegFormer, trained for 86 epochs so far, gets the test RMSE down to ~10.2. Inference is fast for both: ~0.39 ms/image for linear regression, ~6.26 ms/image for SegFormer.
 
 The area of interest is split into a 104 × 54 grid of 6.4 km patches (5,616 total, 25 m/pixel), each rendered as satellite RGB, elevation, crown closure, and a validity mask, so patches can be shuffled, split, and streamed independently rather than working with the whole region as one giant raster.
 
 
 ## Plots
-
-**Predicted vs. true crown closure, sample patches:**
-<img src="plots/random_patch_sets.png"/>
 
 **Linear regression vs. SegFormer, side by side:**
 <img src="plots/patch_predictions.png"/>
@@ -93,7 +90,7 @@ CABIN/
 │   ├── crown_closure_mask/
 │   ├── crown_closure_polygons.gpkg
 │   ├── crown_closure_pred_linear_mosaic/   # Linear model's predictions, whole AOI
-│   ├── crown_closure_pred_segformer_mosaic/  # SegFormer's predictions, whole AOI
+│   ├── crown_closure_pred_segformer_mosaic/  # SegFormer's predictions, whole AOI (committed to Git -- the one prediction/data output under 100MB in full)
 │   └── patches/                            # Per-patch imagery, CSVs, and predictions
 ├── models/
 │   ├── linear_regression_coefs_testrmse*.csv   # Fitted coefficients, p-values, R²
@@ -120,6 +117,5 @@ Mapped against the case study's required and bonus deliverables:
 - [x] Candidate model + core comparison — `segformer_trainer.ipynb`, compared in the intro above
 
 **Bonus**
-- [x] Extended model evaluation/interpretation — per-epoch RMSE tracking (`plots/test_rmse.png`), side-by-side patch visualization (`visualize_patch_predictions.ipynb`)
 - [x] GIS-compatible prediction output — georeferenced PNG + world file (`.pgw`) + `.prj` mosaics in `datasets/crown_closure_pred_*_mosaic/`
 - [x] At least one final map — whole-AOI prediction mosaics, loadable directly into QGIS
