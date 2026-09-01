@@ -11,7 +11,7 @@ import zipfile
 BASE_URL    = "https://pub.data.gov.bc.ca/datasets/175624"
 OUT_DIR     = "/Volumes/Spleen/CABIN/datasets/dem"
 VRT_PATH    = "/Volumes/Spleen/CABIN/datasets/dem_merged.vrt"
-DEM_PATH    = "/Volumes/Spleen/CABIN/datasets/DEM.tif"
+DEM_PATH    = "/Volumes/Spleen/CABIN/datasets/dem/DEM.tif"
 
 # AOI — same as cropper (EPSG:4326)
 LAT_MIN, LAT_MAX = 49, 51

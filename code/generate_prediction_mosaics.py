@@ -155,6 +155,8 @@ patch_files = sorted(
 print(f"{len(patch_files)} patches")
 
 t0 = time.time()
+linear_time_total    = 0.0
+segformer_time_total = 0.0
 with torch.no_grad():
     for batch_start in range(0, len(patch_files), BATCH_SIZE):
         chunk = patch_files[batch_start:batch_start + BATCH_SIZE]
@@ -170,16 +172,20 @@ with torch.no_grad():
             xs.append(np.concatenate([(sat / 255.0).transpose(2, 0, 1), (dem / 255.0)[None]], axis=0).astype(np.float32))
 
         X = torch.tensor(np.stack(xs), device=DEVICE)
+        t_seg = time.time()
         logits = model(pixel_values=X).logits
         preds = F.interpolate(logits, size=(PATCH_SIZE_PX, PATCH_SIZE_PX), mode="bilinear", align_corners=False)[:, 0]
         seg_preds = (preds.cpu().numpy() * 100).clip(0, 100).astype(np.uint8)
+        segformer_time_total += time.time() - t_seg
 
         for j, filename in enumerate(chunk):
             patch_id = patch_ids[j]
             col = patch_id % n_cols
             row = patch_id // n_cols  # 0 = southernmost row (matches mosaic_sampler.py's grid)
 
+            t_lin = time.time()
             lin_pred = predict_linear(sats[j], dems[j])
+            linear_time_total += time.time() - t_lin
             seg_pred = seg_preds[j]
 
             Image.fromarray(lin_pred).save(os.path.join(LINEAR_PRED_OUT, filename))
@@ -200,6 +206,8 @@ with torch.no_grad():
             print(f"  {done}/{len(patch_files)} patches  ({time.time() - t0:.0f}s elapsed)")
 
 print(f"Per-patch predictions done in {time.time() - t0:.0f}s")
+print(f"Avg linear regression time/image: {linear_time_total / len(patch_files) * 1000:.3f} ms")
+print(f"Avg SegFormer time/image: {segformer_time_total / len(patch_files) * 1000:.3f} ms")
 
 # ---------------------------------------------------------
 # Save mosaics -- PNG + world file + .prj. No GDAL needed in this

@@ -29,7 +29,7 @@ PATCH_SIZE_PX = 256    # output image size in pixels
 SAT_LAYER = "sentinel2_2025"
 
 # Source raster paths
-DEM_PATH      = "/Volumes/Spleen/CABIN/datasets/DEM.tif"
+DEM_PATH      = "/Volumes/Spleen/CABIN/datasets/dem/DEM.tif"
 CANOPY_PATH   = "/Volumes/Spleen/CABIN/datasets/crown_closure_raster/crown_closure_raster.tif"
 CANOPY_NODATA = -9999
 MASK_PATH     = "/Volumes/Spleen/CABIN/datasets/crown_closure_mask/crown_closure_mask.tif"

@@ -1,0 +1,10 @@
+# Environment for the non-GIS side of the pipeline: model training,
+# prediction-mosaic generation, and result visualization. Tested with
+# Python 3.13 (Anaconda "base" env). Does NOT include GDAL/PyQGIS --
+# those come from a QGIS installation instead, see README setup section.
+torch==2.11.0
+transformers==5.5.0
+pandas==2.3.3
+numpy==2.1.3
+pillow==11.1.0
+matplotlib==3.10.0
