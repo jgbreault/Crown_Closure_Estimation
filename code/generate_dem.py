@@ -1,3 +1,6 @@
+# Downloads BC's CDED (NTS 1:250,000) elevation tiles covering the AOI,
+# then mosaics + clips them into a single DEM.tif. Run this inside QGIS's
+# Python Console (needs GDAL/PyQGIS) -- see README "Running the Pipeline".
 import os
 import re
 import glob
@@ -13,7 +16,9 @@ OUT_DIR     = "/Volumes/Spleen/CABIN/datasets/dem"
 VRT_PATH    = "/Volumes/Spleen/CABIN/datasets/dem_merged.vrt"
 DEM_PATH    = "/Volumes/Spleen/CABIN/datasets/dem/DEM.tif"
 
-# AOI — same as cropper (EPSG:4326)
+# AOI — must match generate_crown_closure.py and generate_patch_images.py
+# (EPSG:4326, i.e. plain lat/lon -- reprojection to EPSG:3857 happens
+# later, at patch-render time, not here)
 LAT_MIN, LAT_MAX = 49, 51
 LNG_MIN, LNG_MAX = -125, -119
 
@@ -33,6 +38,12 @@ SHEETS = [
 # Helpers
 # ---------------------------------------------------------
 def list_zips(sheet):
+    """
+    Scrapes the government's plain directory-listing page for a given
+    NTS sheet to discover which .dem.zip tiles actually exist, rather
+    than hardcoding tile filenames (each sheet has a different number
+    of tiles).
+    """
     url = f"{BASE_URL}/{sheet}/"
     with urllib.request.urlopen(url) as r:
         html = r.read().decode()
@@ -103,13 +114,20 @@ else:
 
     from osgeo import gdal
 
-    # Build intermediate VRT mosaic
+    # BuildVRT doesn't copy pixel data -- it just writes a small XML file
+    # that tells GDAL how the individual tiles fit together, using each
+    # tile's own georeferencing. Nothing is resampled or merged yet.
     vrt = gdal.BuildVRT(VRT_PATH, dem_files)
     vrt.FlushCache()
     vrt = None
     print(f"Intermediate VRT saved → {VRT_PATH}")
 
-    # Clip to AOI and write final DEM.tif
+    # Warp is the step that actually reads pixels through the VRT and
+    # writes one real merged file, cropped to the AOI. No dstSRS is
+    # passed, so DEM.tif stays in the tiles' native CRS (NAD83
+    # geographic, EPSG:4269) at native ~0.75 arc-sec resolution --
+    # reprojection to EPSG:3857 / 25m happens later, per-patch, in
+    # generate_patch_images.py.
     print(f"Clipping to AOI → {DEM_PATH} ...")
     gdal.Warp(
         DEM_PATH, VRT_PATH,

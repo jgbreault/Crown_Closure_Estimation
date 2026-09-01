@@ -1,3 +1,8 @@
+# Downloads BC's VRI (Vegetation Resources Inventory) geodatabase, clips
+# it to the AOI, and produces two 25m rasters: CROWN_CLOSURE values (the
+# ground-truth label) and a validity mask marking where a real, non-null
+# measurement exists. Run this inside QGIS's Python Console (needs
+# GDAL/PyQGIS/Processing) -- see README "Running the Pipeline".
 import os
 import zipfile
 import urllib.request
@@ -29,10 +34,15 @@ GDB_PATH     = os.path.join(DATASETS_DIR, GDB_NAME)
 
 KEEP_FIELDS  = ["CROWN_CLOSURE"]
 BURN_FIELD   = "CROWN_CLOSURE"
+# In EPSG:3857 projected units, not true ground meters -- Web Mercator's
+# scale factor grows with latitude, so this is ~15-23m true ground
+# distance across the AOI, not literally 25m. Kept in projected units so
+# it lines up exactly with generate_patch_images.py's grid.
 PIXEL_SIZE   = 25
 NO_DATA      = -9999
 
-# AOI — same as cropper (EPSG:4326)
+# AOI — must match generate_dem.py and generate_patch_images.py
+# (EPSG:4326, i.e. plain lat/lon)
 LAT_MIN, LAT_MAX = 49, 51
 LNG_MIN, LNG_MAX = -125, -119
 
@@ -78,8 +88,11 @@ if not layer.isValid():
     raise RuntimeError(f"Could not load '{LAYER_NAME}' from '{GDB_PATH}'.")
 
 # ---------------------------------------------------------
-# 3. Crop to AOI (same logic as crown_canopy_cropper.py)
+# 3. Crop to AOI
 # ---------------------------------------------------------
+# The VRI's native CRS is NAD83 / BC Albers (EPSG:3005), not EPSG:3857 --
+# read it from the layer itself (layer_crs) rather than assuming, and
+# transform everything into the project's common working CRS (out_crs).
 src_crs   = QgsCoordinateReferenceSystem("EPSG:4326")
 layer_crs = layer.crs()
 out_crs   = QgsCoordinateReferenceSystem("EPSG:3857")
@@ -156,8 +169,12 @@ if error != QgsVectorFileWriter.NoError:
 print(f"Saved vector → {GPKG_PATH}")
 
 # ---------------------------------------------------------
-# 5. Rasterize CROWN_CLOSURE (same logic as canopy_rasterizer.py)
+# 5. Rasterize CROWN_CLOSURE
 # ---------------------------------------------------------
+# Each output pixel gets the CROWN_CLOSURE value of whatever polygon
+# covers its center point (standard polygon-fill rasterization, not an
+# area-weighted average) -- if a polygon boundary cuts through a pixel,
+# that pixel gets one polygon's value entirely, not a blend of both.
 vec_layer  = QgsVectorLayer(f"{GPKG_PATH}|layername=study_area", "study_area", "ogr")
 extent     = vec_layer.extent()
 extent_str = (
@@ -170,7 +187,8 @@ result = processing.run("gdal:rasterize", {
     "FIELD":     BURN_FIELD,
     "BURN":      0,
     "USE_Z":     False,
-    "UNITS":     1,
+    "UNITS":     1,            # "Georeferenced units" -- WIDTH/HEIGHT
+                                # below are pixel size, not image dimensions
     "WIDTH":     PIXEL_SIZE,
     "HEIGHT":    PIXEL_SIZE,
     "EXTENT":    extent_str,

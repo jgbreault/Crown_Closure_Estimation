@@ -1,3 +1,8 @@
+# Loads both trained models (lowest test-RMSE checkpoint of each) and
+# runs them across every patch, saving per-patch prediction PNGs plus
+# two whole-AOI mosaic images. Needs generate_patch_images.py's output
+# and at least one trained checkpoint from each notebook. Pure Python/
+# PyTorch, no GDAL/PyQGIS -- run in a normal terminal/Jupyter.
 import os
 import re
 import glob
@@ -38,13 +43,14 @@ BATCH_SIZE    = 8
 
 RGB_MIN, RGB_MAX = 0, 255
 
-# AOI -- must match mosaic_sampler.py (EPSG:4326)
+# AOI -- must match generate_patch_images.py (EPSG:4326)
 LAT_MIN, LAT_MAX = 49, 51
 LNG_MIN, LNG_MAX = -125, -119
 
 # ---------------------------------------------------------
-# Web Mercator (EPSG:3857) forward projection -- same spherical
-# formulas QGIS uses, so the grid lines up with mosaic_sampler.py
+# Web Mercator (EPSG:3857) forward projection -- same spherical formulas
+# QGIS uses, reimplemented here in pure Python (no GDAL in this
+# environment) so the grid lines up exactly with generate_patch_images.py
 # ---------------------------------------------------------
 EARTH_RADIUS_M = 6378137.0
 
@@ -57,7 +63,7 @@ AOI_XMIN, AOI_YMIN = lonlat_to_3857(LNG_MIN, LAT_MIN)
 AOI_XMAX, AOI_YMAX = lonlat_to_3857(LNG_MAX, LAT_MAX)
 n_cols = int((AOI_XMAX - AOI_XMIN) / PATCH_SIZE_M)
 n_rows = int((AOI_YMAX - AOI_YMIN) / PATCH_SIZE_M)
-PIXEL_RES = PATCH_SIZE_M / PATCH_SIZE_PX  # 25m, matches mosaic_sampler.py
+PIXEL_RES = PATCH_SIZE_M / PATCH_SIZE_PX  # 25m, matches generate_patch_images.py
 
 os.makedirs(LINEAR_PRED_OUT, exist_ok=True)
 os.makedirs(SEGFORMER_PRED_OUT, exist_ok=True)
@@ -67,9 +73,9 @@ os.makedirs(MOSAIC_SEGFORMER_DIR, exist_ok=True)
 # ---------------------------------------------------------
 # Device -- this script only does forward passes (no training), and
 # only SegFormer's *backward* pass crashes on this machine's MPS
-# backend (see CABIN_segformer_trainer.ipynb), so MPS should be safe
-# here. Smoke-tested anyway, with a CPU fallback, for consistency with
-# the rest of the project's scripts.
+# backend (see segformer_trainer.ipynb), so MPS should be safe here.
+# Smoke-tested anyway, with a CPU fallback, for consistency with the
+# rest of the project's scripts.
 # ---------------------------------------------------------
 if torch.cuda.is_available():
     DEVICE = torch.device("cuda")
@@ -85,13 +91,17 @@ print("device:", DEVICE)
 coef_candidates = glob.glob(os.path.join(MODELS_DIR, "linear_regression_coefs_testrmse*.csv"))
 if not coef_candidates:
     raise RuntimeError("No linear regression coefficients CSV found under models/ -- run linear_regression_trainer.ipynb first.")
-COEFS_CSV = max(coef_candidates, key=os.path.getmtime)  # most recently trained
+COEFS_CSV = max(coef_candidates, key=os.path.getmtime)  # most recently written file, not necessarily lowest RMSE
 coefs = pd.read_csv(COEFS_CSV, index_col="feature")["coef"]
 print(f"Loaded linear regression coefficients from {COEFS_CSV}")
 
 ckpt_candidates = glob.glob(os.path.join(MODELS_DIR, "segformer_crown_closure_epoch*_testrmse*"))
 if not ckpt_candidates:
     raise RuntimeError("No SegFormer checkpoint found under models/ -- train it first.")
+# Unlike the coefficients CSV above, this picks by lowest test RMSE
+# (parsed out of the checkpoint folder name), not most recently trained
+# -- SegFormer checkpoints one per epoch, and RMSE isn't monotonic
+# across epochs, so "latest" and "best" aren't the same checkpoint.
 SEGFORMER_CKPT = min(
     ckpt_candidates,
     key=lambda d: float(re.search(r"_testrmse([\d.]+)", os.path.basename(d)).group(1)),
@@ -109,13 +119,13 @@ except RuntimeError as e:
     model.to(DEVICE)
 print("using device:", DEVICE)
 
-# ---------------------------------------------------------
-# Linear regression prediction -- per patch, numpy only. Reconstructs
-# whatever feature set the model was fit with by reading the coefs
-# Series' index, same trick as predict_crown_closure_linear() in
-# CABIN_trainer.ipynb.
-# ---------------------------------------------------------
 def predict_linear(sat, dem):
+    """
+    Linear regression prediction, per patch, numpy only. Reconstructs
+    whatever feature set the model was fit with by reading the coefs
+    Series' index, same trick as predict_crown_closure_linear() in
+    linear_regression_trainer.ipynb.
+    """
     rgb_std  = (sat - RGB_MIN) / (RGB_MAX - RGB_MIN)
     elev_std = dem / 255.0
     pred = np.full(dem.shape, coefs.get("const", 0.0))
@@ -181,7 +191,7 @@ with torch.no_grad():
         for j, filename in enumerate(chunk):
             patch_id = patch_ids[j]
             col = patch_id % n_cols
-            row = patch_id // n_cols  # 0 = southernmost row (matches mosaic_sampler.py's grid)
+            row = patch_id // n_cols  # 0 = southernmost row (matches generate_patch_images.py's grid)
 
             t_lin = time.time()
             lin_pred = predict_linear(sats[j], dems[j])
@@ -225,6 +235,11 @@ PRJ_WKT_3857 = (
 )
 
 def save_georeferenced_png(array, path):
+    """
+    Saves array as a PNG plus a .pgw world file and .prj, so QGIS (or
+    any GIS software) can place it correctly without the georeferencing
+    being baked into the image file itself.
+    """
     Image.fromarray(array).save(path)
     worldfile_path = os.path.splitext(path)[0] + ".pgw"
     with open(worldfile_path, "w") as f:

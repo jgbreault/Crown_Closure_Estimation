@@ -1,3 +1,6 @@
+# Optional diagnostic plots over the VRI polygons clipped to the AOI --
+# reads crown_closure_polygons.gpkg, written by generate_crown_closure.py,
+# so run that first. Not used by any downstream step; purely descriptive.
 import os
 import matplotlib
 matplotlib.use("Agg")

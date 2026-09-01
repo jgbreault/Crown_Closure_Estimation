@@ -38,6 +38,14 @@ The area of interest is split into a 104 × 54 grid of 6.4 km patches (5,616 tot
 4. <a href="https://huggingface.co/Pranilllllll/segformer-satellite-segementation" target="_blank" rel="noopener noreferrer">SegFormer-B0, pretrained on satellite imagery</a>
     - Starting checkpoint for the SegFormer model. Fine-tuned on real satellite tiles (not natural photos, unlike most public SegFormer checkpoints), so its RGB features transfer more directly. Adapted here by expanding the first conv layer to take a 4th (elevation) channel and swapping its classifier for a single-channel regression head.
 
+| | Sentinel-2 Cloudless | BC CDED (DEM) | VRI - Forest Vegetation Composite R1 |
+|---|---|---|---|
+| Description | Satellite imagery (RGB) | Elevation | Crown closure (and more) |
+| Resolution | 10 m/pixel | 0.75 arc-sec (~15-23 m) | Vector polygons |
+| CRS | EPSG:3857 | EPSG:4269 | EPSG:3005 |
+| Year | 2025 | 2012 | 2025 |
+| Range | Global | BC | BC |
+
 All four sources have different native CRSs and resolutions; everything is reprojected to a common EPSG:3857 / 25 m grid before patching.
 
 

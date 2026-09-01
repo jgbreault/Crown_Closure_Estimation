@@ -1,3 +1,13 @@
+# Cuts the AOI into a grid of PATCH_SIZE_M patches and renders each one
+# as 4 aligned PNGs: satellite RGB, elevation, crown closure, and a
+# validity mask. Needs the 'sentinel2_2025' layer already added to the
+# QGIS project (generate_sentinel2.py) and DEM.tif / crown_closure_raster
+# / crown_closure_mask already generated (generate_dem.py,
+# generate_crown_closure.py). Run inside QGIS's Python Console -- see
+# README "Running the Pipeline".
+#
+# Every run clears nothing itself, but always starts numbering from
+# patch 0 -- re-running overwrites existing patches rather than resuming.
 import os
 import numpy as np
 from osgeo import gdal
@@ -34,7 +44,10 @@ CANOPY_PATH   = "/Volumes/Spleen/CABIN/datasets/crown_closure_raster/crown_closu
 CANOPY_NODATA = -9999
 MASK_PATH     = "/Volumes/Spleen/CABIN/datasets/crown_closure_mask/crown_closure_mask.tif"
 
-# DEM normalization — fixed BC-wide range
+# DEM normalization — fixed BC-wide range, not each patch's own min/max,
+# so a given pixel value means the same real elevation in every patch
+# (and stays valid for any future out-of-AOI input, since it's anchored
+# to a real geographic constant instead of this dataset's own stats).
 DEM_ELEV_MIN = 0
 DEM_ELEV_MAX = 4671    # Mt. Fairweather, highest point in BC
 
@@ -87,10 +100,13 @@ if not sat_layer:
     raise RuntimeError(f"Layer '{SAT_LAYER}' not found in QGIS project.")
 sat_layer = sat_layer[0]
 
-# ---------------------------------------------------------
-# GDAL patch extractor
-# ---------------------------------------------------------
 def extract_raster_patch(src_path, xmin, ymin, xmax, ymax):
+    """
+    Extracts one patch from a GDAL-readable raster (the DEM or
+    crown-closure rasters). Reprojects (source CRS -> EPSG:3857) and
+    resamples to PIXEL_RES in a single gdal.Warp call, writing to an
+    in-memory file (/vsimem) so nothing touches disk per patch.
+    """
     mem = "/vsimem/patch.tif"
     ds = gdal.Warp(
         mem, src_path,
@@ -107,10 +123,14 @@ def extract_raster_patch(src_path, xmin, ymin, xmax, ymax):
     gdal.Unlink(mem)
     return arr
 
-# ---------------------------------------------------------
-# QGIS renderer — satellite XYZ layer
-# ---------------------------------------------------------
 def render_layer_patch(layer, xmin, ymin, xmax, ymax):
+    """
+    Extracts one patch from the satellite layer, which is a live XYZ
+    tile source (not a file GDAL can open directly). Asks QGIS's own map
+    canvas to render that layer into a PATCH_SIZE_PX square covering
+    this exact geographic extent; QGIS handles pulling/compositing
+    whatever tiles that requires.
+    """
     settings = QgsMapSettings()
     settings.setLayers([layer])
     settings.setDestinationCrs(crs_3857)
@@ -133,13 +153,20 @@ def save_gray_png(arr, path, lo, hi):
            PATCH_SIZE_PX, QImage.Format_Grayscale8).save(path, "PNG")
 
 def save_canopy_png(arr, path):
+    """
+    Stores the literal 0-100 percentage, not stretched to 0-255 like
+    the DEM -- crown closure is already a percentage, so no rescaling is
+    needed, just clamping NODATA to 0 and truncating to one byte.
+    """
     clean = np.where(arr == CANOPY_NODATA, 0, arr)
     clean = np.clip(clean, 0, 100).astype(np.uint8)
     QImage(clean.tobytes(), PATCH_SIZE_PX, PATCH_SIZE_PX,
            PATCH_SIZE_PX, QImage.Format_Grayscale8).save(path, "PNG")
 
 def save_mask_png(arr, path):
-    # 0 = null/no VRI data, 1 = valid → scale to 0/255 for visibility
+    """
+    0 = null/no VRI data, 1 = valid -> scaled to 0/255 for visibility.
+    """
     scaled = np.where(arr > 0, 255, 0).astype(np.uint8)
     QImage(scaled.tobytes(), PATCH_SIZE_PX, PATCH_SIZE_PX,
            PATCH_SIZE_PX, QImage.Format_Grayscale8).save(path, "PNG")

@@ -1,3 +1,9 @@
+# Flattens each of the 4 per-patch PNGs (satellite, elevation, crown
+# closure, mask) into one CSV per patch, one row per pixel -- the
+# per-pixel format the linear regression trainer fits on. Pure Python
+# (PIL/csv/math), no GDAL/PyQGIS needed, so this runs in a normal
+# terminal/Jupyter, not QGIS. Needs generate_patch_images.py's output to
+# already exist.
 import os
 import csv
 import math
