@@ -2,7 +2,12 @@
 
 Crown closure is the percentage of ground covered by the vertical projection of tree canopy, and it's a key input to forest management, wildfire risk, and habitat modelling. Measuring it on the ground is slow and expensive, so this project asks whether it can be predicted directly from satellite RGB imagery and elevation, checked against real ground-truth measurements from British Columbia's forest inventory.
 
-Two models are compared on the same task, over the same area of interest (a ~668 km × ~350 km band of southern BC, lat 49-51°N, lng 119-125°W): a linear regression baseline (RGB and elevation, with elevation entered as a polynomial), and a SegFormer vision transformer fine-tuned from a pretrained satellite-imagery checkpoint. The linear model reaches an R² of 0.28 (test RMSE ~20.3 percentage points of crown closure); SegFormer, trained for 86 epochs so far, gets the test RMSE down to ~10.2. Inference is fast for both: ~0.39 ms/image for linear regression, ~6.26 ms/image for SegFormer.
+Two models are compared on the same task, over the same area of interest (a ~668 km × ~350 km band of southern BC, latitude 49-51°N, longitude 119-125°W): a linear regression baseline (RGB and elevation, with elevation entered as a polynomial), and a SegFormer vision transformer fine-tuned from a pretrained satellite-imagery checkpoint.
+
+| Model | Test RMSE (crown closure, pp) | Inference time/image |
+|---|---|---|
+| Linear regression | ~20.3 | ~0.39 ms |
+| SegFormer (86 epochs so far) | ~10.2 | ~6.26 ms |
 
 The area of interest is split into a 104 × 54 grid of 6.4 km patches (5,616 total, 25 m/pixel), each rendered as satellite RGB, elevation, crown closure, and a validity mask, so patches can be shuffled, split, and streamed independently rather than working with the whole region as one giant raster.
 
