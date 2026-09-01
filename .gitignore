@@ -10,3 +10,8 @@
 # Datasets
 datasets/*
 !datasets/crown_closure_pred_segformer_mosaic/
+!datasets/patches/
+datasets/patches/*
+!datasets/patches/satellite_imagery/
+!datasets/patches/elevation/
+!datasets/patches/crown_closure/
